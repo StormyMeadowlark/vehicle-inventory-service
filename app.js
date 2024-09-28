@@ -11,7 +11,7 @@ dotenv.config();
 const vehicleRoutes = require("./src/routes/vehicleRoutes");
 //const serviceRoutes = require("./src/routes/serviceRoutes");
 //const salesRoutes = require("./src/routes/salesRoutes");
-//const mediaRoutes = require("./src/routes/mediaRoutes");
+const mediaRoutes = require("./src/routes/mediaRoutes");
 //const acquisitionRoutes = require("./src/routes/acquisitionRoutes");
 
 // Initialize the app
@@ -36,7 +36,7 @@ mongoose
 app.use("/api/vehicles", vehicleRoutes);
 //app.use("/api/services", serviceRoutes);
 //app.use("/api/sales", salesRoutes);
-//app.use("/api/media", mediaRoutes);
+app.use("/api/media", mediaRoutes);
 //app.use("/api/acquisition", acquisitionRoutes);
 
 // Error Handling for undefined routes

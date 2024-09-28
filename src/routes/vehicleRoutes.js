@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const VehicleController = require("../controllers/vehicleController");
-const { requireRole } = require("../middleware/authMiddleware"); // Middleware to verify roles
+const requireRole  = require("../middleware/authMiddleware"); // Middleware to verify roles
 
 // Add a new vehicle (only Admins and SuperAdmins)
 router.post(
