@@ -15,21 +15,9 @@ const VehicleSchema = new mongoose.Schema({
   exteriorColor: { type: String },
   interiorColor: { type: String },
   mileage: { type: Number, required: true },
-  condition: {
-    type: String,
-    enum: ["new", "used", "certified_preowned"],
-    default: "used",
-  },
-  previousOwners: { type: Number, default: 0 },
-  isCertified: { type: Boolean, default: false },
   tenant: { type: String, required: true }, // Tenant is required
   users: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
-  organization: { type: mongoose.Schema.Types.ObjectId, ref: "Organization" },
-  saleStatus: {
-    type: String,
-    enum: ["forSale", "inNegotiation", "sold", "returned", "reserved"],
-    default: "forSale", // Default status when a vehicle is listed
-  }, // Users array is optional
+  organization: { type: mongoose.Schema.Types.ObjectId, ref: "Organization" }, // Users array is optional
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
 });
