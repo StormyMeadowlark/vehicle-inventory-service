@@ -13,9 +13,14 @@ exports.addSale = async (req, res) => {
     }
 
     // Extract vehicle ID from the URL parameters and sale details from the request body
-    const { vehicleId } = req.params;
-    const { salePrice, condition, status, marketingChannels, description } =
-      req.body;
+    const {
+      salePrice,
+      condition,
+      status,
+      marketingChannels,
+      description,
+      vehicleId,
+    } = req.body;
 
     console.log("[DEBUG] Sale details:", {
       salePrice,
