@@ -68,13 +68,13 @@ exports.addMedia = async (req, res) => {
 };
 exports.addTenantMedia = async (req, res) => {
   try {
-    // Log the req.files to verify if multer is parsing the files correctly
+    // Log the files received by Multer
     console.log("Uploaded files:", req.files);
 
-    // Get tenantId from the x-tenant-id header
-    const tenantId = req.headers["x-tenant-id"];
+    // Get tenantId from the URL params
+    const tenantId = req.params.tenantId;
     if (!tenantId) {
-      return res.status(400).json({ message: "x-tenant-id header is missing" });
+      return res.status(400).json({ message: "tenantId is missing" });
     }
 
     // Ensure files are present
@@ -90,23 +90,32 @@ exports.addTenantMedia = async (req, res) => {
         Bucket: process.env.DO_SPACES_BUCKET,
         Key: `${tenantId}/${Date.now()}_${file.originalname}`,
         Body: file.buffer,
-        ACL: "public-read",
+        ACL: "public-read", // Make files publicly readable
         ContentType: file.mimetype,
       };
 
-      const result = await s3.upload(uploadParams).promise();
-      uploadedMediaUrls.push(result.Location); // Store the public URL of the uploaded file
+      // Try to upload the file to DigitalOcean Spaces (S3)
+      try {
+        const result = await s3.upload(uploadParams).promise();
+        uploadedMediaUrls.push(result.Location); // Store the public URL of the uploaded file
+      } catch (uploadError) {
+        console.error("Error uploading file to DO Spaces:", uploadError);
+        return res
+          .status(500)
+          .json({ message: "Error uploading file", uploadError });
+      }
     }
 
-    // Create new media document for the tenant (without vehicle association)
+    // Create a new media document in the database for the tenant
     const media = new Media({
       tenantId, // Store media under tenantId
       photos: uploadedMediaUrls,
-      documents: [], // Add documents if needed later
+      documents: [], // You can add document upload support later if needed
     });
 
     await media.save();
 
+    // Respond with success message
     res.status(201).json({ message: "Media uploaded successfully", media });
   } catch (error) {
     console.error("[ERROR] Adding tenant media:", error);

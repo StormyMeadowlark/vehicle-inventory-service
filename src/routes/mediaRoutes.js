@@ -41,9 +41,9 @@ router.get(
 
 router.post(
   "/:tenantId",
-  requireRole(["Admin", "SuperAdmin"]),
-  upload.array("media", 10), // Accept multiple files with the field name "media"
-  MediaController.addTenantMedia
+  requireRole(["Admin", "SuperAdmin"]), // Ensure role-based access
+  upload.array("media", 10), // Allow up to 10 files with the field name "media"
+  MediaController.addTenantMedia // Media controller to handle the upload
 );
 
 router.put(
