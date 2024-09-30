@@ -9,7 +9,7 @@ const requireRole  = require("../middleware/authMiddleware");
 
 // Add sale details for a vehicle (Admin, SuperAdmin, SalesRep)
 router.post(
-  "/:tenantId/:vehicleId",
+  "/:tenantId",
   requireRole(["Admin", "SuperAdmin"]),
   SalesController.addSale
 );
