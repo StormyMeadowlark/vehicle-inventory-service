@@ -25,6 +25,7 @@ const SalesSchema = new mongoose.Schema({
   previousOwners: { type: Number, default: 0 },
   isCertified: { type: Boolean, default: false },
   salePrice: { type: Number, required: true }, // Sale price of the vehicle
+  soldPrice: { type: Number, required: false},
   listedOn: { type: Date, default: Date.now }, // When the vehicle was listed for sale
   soldOn: { type: Date }, // When the vehicle was sold (if applicable)
   marketingChannels: [{ type: String }], // Platforms where the vehicle is marketed
