@@ -107,6 +107,7 @@ exports.getVehicleById = async (req, res) => {
     if (!vehicle) return res.status(404).json({ message: "Vehicle not found" });
 
     res.status(200).json({ vehicle });
+    console.log({vehicle})
   } catch (error) {
     res
       .status(500)
