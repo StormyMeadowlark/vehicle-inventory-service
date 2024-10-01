@@ -19,7 +19,6 @@ router.post(
 // Get all photos/documents for a vehicle (Admin, Mechanic, Viewer)
 router.get(
   "/:tenantId/:vehicleId",
-  requireRole(["Admin", "SuperAdmin", "Mechanic", "Viewer"]),
   MediaController.getMedia
 );
 

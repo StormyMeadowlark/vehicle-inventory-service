@@ -17,7 +17,6 @@ router.post(
 // Get sale details for a specific vehicle (Admin, SuperAdmin, SalesRep)
 router.get(
   "/:tenantId/:vehicleId",
-  requireRole(["Admin", "SuperAdmin"]),
   SalesController.getSaleDetails
 );
 
@@ -38,14 +37,12 @@ router.delete(
 // Get all sales for a tenant (Admin, SuperAdmin, SalesRep)
 router.get(
   "/:tenantId",
-  requireRole(["Admin", "SuperAdmin"]),
   SalesController.getAllSales
 );
 
 // Filter sales by status (available, sold, pending_sale) (Admin, SuperAdmin, SalesRep)
 router.get(
   "/:tenantId/status/:status",
-  requireRole(["Admin", "SuperAdmin"]),
   SalesController.getSalesByStatus
 );
 

@@ -13,14 +13,12 @@ router.post(
 // Get all vehicles for a tenant (Admin, SuperAdmin, Mechanic, Viewer)
 router.get(
   "/:tenantId",
-  requireRole(["Admin", "SuperAdmin", "Mechanic", "Viewer"]),
   VehicleController.getAllVehicles
 );
 
 // Get details for a specific vehicle (Admin, Mechanic, Viewer, User)
 router.get(
   "/:tenantId/:vehicleId",
-  requireRole(["Admin", "SuperAdmin", "Mechanic", "Viewer", "User"]),
   VehicleController.getVehicleById
 );
 
