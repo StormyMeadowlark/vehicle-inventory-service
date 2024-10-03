@@ -3,12 +3,22 @@ const axios = require("axios");
 const vision = require("@google-cloud/vision");
 const Media = require("../models/media");
 const AWS = require("aws-sdk");
+
+
 // Add a new vehicle
 exports.addVehicle = async (req, res) => {
   try {
     const tenantId = req.headers["x-tenant-id"];
+    const authHeader = req.headers["authorization"]; // Get the authorization header
+
     if (!tenantId) {
       return res.status(400).json({ message: "x-tenant-id header is missing" });
+    }
+
+    if (!authHeader) {
+      return res
+        .status(401)
+        .json({ message: "Authorization header is required" }); // Check for authorization
     }
 
     const {
@@ -16,26 +26,50 @@ exports.addVehicle = async (req, res) => {
       make,
       model,
       year,
+      trim,
+      engine,
+      transmission,
+      drivetrain,
+      fuelType,
+      bodyType,
       mileage,
       exteriorColor,
       interiorColor,
       users,
+      features,
+      dynamicFieldsData, // New field for additional dynamic data
     } = req.body;
 
     // Optional: Users array (only included if provided)
     const userArray = Array.isArray(users) ? users : [];
 
-    // Create a new vehicle associated with the tenant, and optionally with users
+    // Optional: Features array (only included if provided)
+    const featuresArray = Array.isArray(features) ? features : [];
+
+    // Populate dynamicFields based on the dynamicFieldsData or any other logic
+    const dynamicFields = {
+      ...dynamicFieldsData, // Use spread operator to include all properties from dynamicFieldsData
+    };
+
+    // Create a new vehicle associated with the tenant, and optionally with users and features
     const newVehicle = new Vehicle({
       VIN,
       make,
       model,
       year,
+      trim: trim || "", // Optional
+      engine: engine || "", // Optional
+      transmission: transmission || "", // Optional
+      drivetrain: drivetrain || "", // Optional
+      fuelType: fuelType || "", // Optional
+      bodyType: bodyType || "", // Optional
       mileage,
-      exteriorColor,
-      interiorColor,
+      exteriorColor: exteriorColor || "", // Optional
+      interiorColor: interiorColor || "", // Optional
       tenant: tenantId, // Assign the tenant ID from the request headers (required)
       users: userArray, // Optionally assign users if provided
+      features: featuresArray,
+      dynamicFields: dynamicFields, // Assign dynamic fields
     });
 
     await newVehicle.save();
@@ -47,103 +81,223 @@ exports.addVehicle = async (req, res) => {
     res.status(500).json({ message: "Error adding vehicle", error });
   }
 };
+
 // Get all vehicles for a tenant
 exports.getAllVehicles = async (req, res) => {
   try {
     const tenantId = req.headers["x-tenant-id"];
+    const authHeader = req.headers["authorization"]; // Ensure authHeader is declared here
+
     if (!tenantId) {
       return res.status(400).json({ message: "x-tenant-id header is missing" });
     }
 
+    if (!authHeader) {
+      return res
+        .status(401)
+        .json({ message: "Authorization header is required" });
+    }
+
     const {
+      VIN,
       make,
       model,
       year,
+      trim,
+      engine,
+      transmission,
+      drivetrain,
+      fuelType,
+      bodyType,
+      exteriorColor,
+      interiorColor,
+      features,
+      mileage,
+      saleStatus,
       userIds,
-      saleStatus, // Adding saleStatus as a query parameter
-      sortBy,
+      sortBy = "createdAt",
       sortOrder = "asc",
       page = 1,
       limit = 10,
     } = req.query;
 
-    // Build the query based on filters and tenant ID
+    // Build the query object based on provided filters and tenant ID
     let query = { tenant: tenantId };
 
+    // Add filtering based on optional fields
+    if (VIN) query.VIN = VIN;
     if (make) query.make = make;
     if (model) query.model = model;
-    if (year) query.year = year;
+    if (year) query.year = parseInt(year);
+    if (trim) query.trim = trim;
+    if (engine) query.engine = engine;
+    if (transmission) query.transmission = transmission;
+    if (drivetrain) query.drivetrain = drivetrain;
+    if (fuelType) query.fuelType = fuelType;
+    if (bodyType) query.bodyType = bodyType;
+    if (exteriorColor) query.exteriorColor = exteriorColor;
+    if (interiorColor) query.interiorColor = interiorColor;
+
+    // If features are provided, match at least one of them
+    if (features && Array.isArray(features)) {
+      query.features = { $in: features };
+    }
+
+    // If mileage is provided, apply filtering
+    if (mileage) {
+      const [minMileage, maxMileage] = mileage.split("-");
+      query.mileage = {
+        ...(minMileage && { $gte: parseInt(minMileage) }),
+        ...(maxMileage && { $lte: parseInt(maxMileage) }),
+      };
+    }
 
     // Optional: Filter by user IDs if provided
     if (userIds && Array.isArray(userIds)) {
       query.users = { $in: userIds };
     }
 
-    // Filter by sale status (for sale, in negotiation, sold, etc.)
-    if (saleStatus) {
-      query.saleStatus = saleStatus; // Match the enum value in the schema (e.g., "forSale", "inNegotiation", etc.)
-    }
+    // Fetch user data from USER_SERVICE_URL
+    const userServiceUrl = process.env.USER_SERVICE_URL; // Accessing the environment variable
 
-    // Pagination setup
+    // Make sure to pass the headers with the request
+    const userResponse = await axios.get(`${userServiceUrl}/${tenantId}`, {
+      headers: {
+        Authorization: authHeader, // Pass the authorization header
+        "x-tenant-id": tenantId, // Pass the tenant ID
+      },
+    });
+
+    // Assume we don't care about users for now, so we can comment this out
+    // const users = userResponse.data;
+
+    // Pagination setup and sorting options
     const options = {
       page: parseInt(page, 10),
       limit: parseInt(limit, 10),
-      sort: { [sortBy || "createdAt"]: sortOrder === "desc" ? -1 : 1 }, // Sort by default or requested field
+      sort: { [sortBy]: sortOrder === "desc" ? -1 : 1 },
     };
 
-    // Retrieve paginated and filtered vehicles for the tenant (organization)
+    // Use Mongoose paginate method to retrieve paginated results
     const vehicles = await Vehicle.paginate(query, options);
 
+    // Return paginated and filtered results
     res.status(200).json({ vehicles });
   } catch (error) {
     console.error("[ERROR] Retrieving vehicles:", error);
     res.status(500).json({ message: "Error retrieving vehicles", error });
   }
 };
-
+//Not Tested
 // Get details for a specific vehicle
 exports.getVehicleById = async (req, res) => {
   try {
     const { tenantId, vehicleId } = req.params;
 
-    const vehicle = await Vehicle.findOne({ _id: vehicleId, tenant: tenantId }); // Ensure tenant ownership
-    if (!vehicle) return res.status(404).json({ message: "Vehicle not found" });
+    // Ensure tenant ownership while fetching the vehicle
+    const vehicle = await Vehicle.findOne({ _id: vehicleId, tenant: tenantId });
 
+    // Check if the vehicle was found
+    if (!vehicle) {
+      return res.status(404).json({ message: "Vehicle not found" });
+    }
+
+    // Return the vehicle details as a JSON response
     res.status(200).json({ vehicle });
-    console.log({vehicle})
+
+    // Log the vehicle details to the console for debugging purposes
+    console.log({ vehicle });
   } catch (error) {
+    // Handle any errors that occur during the database query
     res
       .status(500)
       .json({ message: "Error retrieving vehicle details", error });
   }
 };
-
 // Update a vehicle
 exports.updateVehicle = async (req, res) => {
   try {
-    const { tenantId, vehicleId } = req.params;
-    const updatedData = req.body;
+    const { tenantId, vehicleId } = req.params; // Extract tenantId and vehicleId from params
+    const updatedData = req.body; // Get the updated data from request body
 
+    // Destructure fields from updatedData
+    const {
+      VIN,
+      make,
+      model,
+      year,
+      trim,
+      engine,
+      transmission,
+      drivetrain,
+      fuelType,
+      bodyType,
+      exteriorColor,
+      interiorColor,
+      mileage,
+      features,
+      dynamicFields, // Include dynamicFields from request body
+    } = updatedData;
+
+    // Optional: Validate VIN uniqueness if updated
+    if (VIN) {
+      const existingVehicle = await Vehicle.findOne({
+        VIN,
+        tenant: tenantId,
+        _id: { $ne: vehicleId }, // Exclude the current vehicle ID
+      });
+      if (existingVehicle) {
+        return res.status(400).json({ message: "VIN must be unique" });
+      }
+    }
+
+    // Prepare the update data object
+    const updateData = {
+      ...(VIN && { VIN }), // Include VIN only if provided
+      ...(make && { make }),
+      ...(model && { model }),
+      ...(year && { year }),
+      ...(trim && { trim }),
+      ...(engine && { engine }),
+      ...(transmission && { transmission }),
+      ...(drivetrain && { drivetrain }),
+      ...(fuelType && { fuelType }),
+      ...(bodyType && { bodyType }),
+      ...(exteriorColor && { exteriorColor }),
+      ...(interiorColor && { interiorColor }),
+      ...(mileage && { mileage }),
+      ...(features && { features }),
+      updatedAt: Date.now(), // Update the timestamp
+    };
+
+    // Update dynamicFields only if provided
+    if (dynamicFields && typeof dynamicFields === "object") {
+      updateData.dynamicFields = {
+        ...updateData.dynamicFields, // Retain existing dynamic fields
+        ...dynamicFields, // Merge new dynamic fields
+      };
+    }
+
+    // Update vehicle data in the database
     const updatedVehicle = await Vehicle.findOneAndUpdate(
       { _id: vehicleId, tenant: tenantId }, // Ensure tenant ownership
-      updatedData,
-      { new: true }
+      updateData,
+      { new: true, runValidators: true } // Options to return the updated document and run validators
     );
 
-    if (!updatedVehicle)
+    if (!updatedVehicle) {
       return res.status(404).json({ message: "Vehicle not found" });
+    }
 
-    res
-      .status(200)
-      .json({
-        message: "Vehicle updated successfully",
-        vehicle: updatedVehicle,
-      });
+    res.status(200).json({
+      message: "Vehicle updated successfully",
+      vehicle: updatedVehicle,
+    });
   } catch (error) {
+    console.error("[ERROR] Updating vehicle:", error); // Log the error for debugging
     res.status(500).json({ message: "Error updating vehicle", error });
   }
 };
-
 // Delete a vehicle
 exports.deleteVehicle = async (req, res) => {
   try {
@@ -161,6 +315,7 @@ exports.deleteVehicle = async (req, res) => {
     res.status(500).json({ message: "Error deleting vehicle", error });
   }
 };
+
 // Soft Delete a vehicle
 exports.softDeleteVehicle = async (req, res) => {
   try {
@@ -168,7 +323,7 @@ exports.softDeleteVehicle = async (req, res) => {
 
     const softDeletedVehicle = await Vehicle.findOneAndUpdate(
       { _id: vehicleId, tenant: tenantId },
-      { isDeleted: true }, // Set the isDeleted flag to true
+      { softDelete: true }, // Set the isDeleted flag to true
       { new: true }
     );
 
@@ -196,17 +351,9 @@ exports.extractAndDecodeVIN = async (req, res) => {
       return res.status(400).json({ message: "x-tenant-id header is missing" });
     }
 
-    const { vehicleId } = req.params;
-
-    // Ensure the vehicle exists (if provided)
-    const vehicle = vehicleId
-      ? await Vehicle.findOne({ _id: vehicleId, tenant: tenantId })
-      : null;
-
-    if (vehicleId && !vehicle) {
-      return res
-        .status(404)
-        .json({ message: "Vehicle not found or access denied" });
+    // Ensure uploaded files exist
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ message: "No files uploaded" });
     }
 
     const uploadedMediaUrls = [];
@@ -228,7 +375,7 @@ exports.extractAndDecodeVIN = async (req, res) => {
     // Save the uploaded images to the Media collection
     const media = new Media({
       tenantId,
-      vehicleId: vehicleId || null, // If vehicleId is available, link it; otherwise, leave it null
+      vehicleId: null, // If vehicleId is available, link it; otherwise, leave it null
       photos: uploadedMediaUrls,
     });
 
@@ -236,7 +383,10 @@ exports.extractAndDecodeVIN = async (req, res) => {
 
     // Perform OCR to extract the VIN from the uploaded image
     const client = new vision.ImageAnnotatorClient();
-    const [result] = await client.textDetection(uploadedMediaUrls[0]); // Use the first uploaded image for OCR
+    const [result] = await client.textDetection({
+      image: { source: { imageUri: uploadedMediaUrls[0] } }, // Use the URL directly for OCR
+    });
+
     const detections = result.textAnnotations;
 
     if (detections.length === 0) {
@@ -249,7 +399,9 @@ exports.extractAndDecodeVIN = async (req, res) => {
     const match = textFromImage.match(vinRegex);
 
     if (!match) {
-      return res.status(400).json({ message: "No valid VIN found in the image" });
+      return res
+        .status(400)
+        .json({ message: "No valid VIN found in the image" });
     }
 
     const vin = match[0];
@@ -264,75 +416,122 @@ exports.extractAndDecodeVIN = async (req, res) => {
       return res.status(400).json({ message: "Unable to decode VIN" });
     }
 
-    // Check if the vehicle exists in the database, and update or create
-    let newVehicle = await Vehicle.findOne({ VIN: vin });
-    if (!newVehicle) {
-      newVehicle = new Vehicle({
-        VIN,
-        make: vehicleDetails.Make,
-        model: vehicleDetails.Model,
-        year: vehicleDetails.ModelYear,
-        engine: vehicleDetails.EngineModel,
-        bodyType: vehicleDetails.BodyClass,
-        transmission: req.body.transmission || "Unknown", // User input
-        drivetrain: req.body.drivetrain || "Unknown", // User input
-        fuelType: req.body.fuelType || "Unknown", // User input
-        exteriorColor: req.body.exteriorColor || "Unknown", // User input
-        interiorColor: req.body.interiorColor || "Unknown", // User input
-        mileage: req.body.mileage || 0, // User input
-        features: req.body.features || [], // User input for features
-        tenant: tenantId,
-      });
-    } else {
-      // Update existing vehicle entry
-      newVehicle.make = vehicleDetails.Make;
-      newVehicle.model = vehicleDetails.Model;
-      newVehicle.year = vehicleDetails.ModelYear;
-      newVehicle.engine = vehicleDetails.EngineModel;
-      newVehicle.bodyType = vehicleDetails.BodyClass;
-    }
-
-    await newVehicle.save();
-
-    // Link the media entry to the new vehicle
-    media.vehicleId = newVehicle._id;
-    await media.save();
+    // Populate vehicle data from the decoded VIN
+    const vehicleData = {
+      VIN: vin,
+      make: vehicleDetails.Make || "Unknown",
+      model: vehicleDetails.Model || "Unknown",
+      year: vehicleDetails.ModelYear || "Unknown",
+      engine: vehicleDetails.EngineModel || "Unknown",
+      bodyType: vehicleDetails.BodyClass || "Unknown",
+      transmission: req.body.transmission || "Unknown",
+      drivetrain: req.body.drivetrain || "Unknown",
+      fuelType: req.body.fuelType || "Unknown",
+      exteriorColor: req.body.exteriorColor || "Unknown",
+      interiorColor: req.body.interiorColor || "Unknown",
+      mileage: req.body.mileage || 0,
+      features: req.body.features || [],
+    };
 
     // Return vehicle details along with media
     return res.status(200).json({
-      message: "VIN extracted, vehicle details decoded, and media linked successfully",
-      vehicle: newVehicle,
+      message: "VIN extracted and vehicle details decoded successfully",
+      vehicle: vehicleData,
       media,
     });
   } catch (error) {
     console.error("[ERROR] Extracting and decoding VIN:", error);
-    res.status(500).json({ message: "Error extracting and decoding VIN", error });
+    res
+      .status(500)
+      .json({ message: "Error extracting and decoding VIN", error });
   }
 };
 
+
+
+// tested
 // Decode VIN using NHTSA API (manual input)
 exports.decodeVIN = async (req, res) => {
   try {
-    const { vin } = req.body; // VIN manually entered by the user
+    const { vin } = req.body;
 
     if (!vin || vin.length !== 17) {
-      return res.status(400).json({ message: "Invalid VIN. It must be 17 characters." });
+      return res
+        .status(400)
+        .json({ message: "Invalid VIN. It must be 17 characters." });
     }
 
-    // Request to NHTSA API to decode VIN
-    const response = await axios.get(`https://vpic.nhtsa.dot.gov/api/vehicles/decodevinvalues/${vin}?format=json`);
+    const response = await axios.get(
+      `https://vpic.nhtsa.dot.gov/api/vehicles/DecodeVinValues/${vin}?format=json`
+    );
+
+    if (
+      !response.data ||
+      !response.data.Results ||
+      response.data.Results.length === 0
+    ) {
+      return res
+        .status(400)
+        .json({ message: "Invalid response from the NHTSA API." });
+    }
+
     const vehicleDetails = response.data.Results[0];
 
     if (vehicleDetails.ErrorCode === "0") {
+      const updatedData = {};
+      const dynamicFields = {};
+
+      const fieldMapping = {
+        make: "Make",
+        model: "Model",
+        year: "ModelYear",
+        trim: "Trim",
+        engine: "EngineDescription",
+        transmission: "TransmissionStyle",
+        drivetrain: "DriveType",
+        fuelType: "FuelTypePrimary",
+        bodyType: "BodyClass",
+        exteriorColor: "ExteriorColor", // Assuming NHTSA provides this
+        interiorColor: "InteriorColor", // Assuming NHTSA provides this
+        mileage: "Mileage", // Assuming NHTSA provides this
+      };
+
+      // Map known fields
+      for (const [key, nhtsaField] of Object.entries(fieldMapping)) {
+        const value = vehicleDetails[nhtsaField];
+        if (value) {
+          updatedData[key] = value; // Assign value if present
+        }
+      }
+
+      // Gather dynamic fields
+      for (const key in vehicleDetails) {
+        if (
+          !updatedData.hasOwnProperty(key) &&
+          key !== "ErrorCode" &&
+          key !== "ErrorText"
+        ) {
+          dynamicFields[key] = vehicleDetails[key]; // Add to dynamicFields if not already included
+        }
+      }
+
+      updatedData.dynamicFields = dynamicFields; // Assign dynamic fields to the updated data
+      updatedData.tenant = req.headers["x-tenant-id"]; // Ensure tenant is set
+
       return res.status(200).json({
         message: "VIN decoded successfully",
-        data: vehicleDetails,
+        data: updatedData,
       });
     } else {
-      return res.status(400).json({ message: "Unable to decode VIN" });
+      return res
+        .status(400)
+        .json({ message: "Unable to decode VIN", error: vehicleDetails });
     }
   } catch (error) {
-    console.error("[ERROR] Decoding VIN:", error);
-    return res.status(500).json({ message: "Error decoding VIN", error });
+    console.error("[ERROR] Decoding VIN:", error.message || error);
+    return res.status(500).json({
+      message: "Error decoding VIN",
+      error: error.message || "Internal server error",
+    });
   }
 };

@@ -7,17 +7,16 @@ const MediaSchema = new mongoose.Schema({
   },
   vehicleId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Vehicle", // Reference to the Vehicle model
-    required: true, // Media is associated with a vehicle
+    ref: "Vehicle", // Reference to the Vehicle model // Media is associated with a vehicle
   },
   mediaType: {
     type: String,
-    enum: ["photo", "document", "video"], // Type of media (photo, document, video)
+    enum: ["photo", "document", "video", "image/jpeg"], // Type of media (photo, document, video)
     required: true,
   },
-  mediaUrl: { 
-    type: String, 
-    required: true 
+  mediaUrl: {
+    type: String,
+    required: true,
   }, // URL or path to the media file (image, document, video)
   description: {
     type: String,
@@ -25,16 +24,16 @@ const MediaSchema = new mongoose.Schema({
   tags: [{ type: String }], // Optional tags to describe or categorize media
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "User", // Reference to the user who uploaded the media
+    ref: "User",
     required: true,
   },
-  createdAt: { 
-    type: Date, 
-    default: Date.now 
+  createdAt: {
+    type: Date,
+    default: Date.now,
   }, // When the media was uploaded
-  updatedAt: { 
-    type: Date, 
-    default: Date.now 
+  updatedAt: {
+    type: Date,
+    default: Date.now,
   }, // Last time media was updated
 });
 
