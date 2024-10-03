@@ -38,4 +38,10 @@ router.delete(
   VehicleController.deleteVehicle
 );
 
+router.delete("/:tenantId/:vehicleId/soft-delete",
+  requireRole(["Admin", "SuperAdmin"]),
+  VehicleController.softDeleteVehicle
+)
+
+
 module.exports = router;
