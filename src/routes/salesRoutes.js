@@ -60,4 +60,46 @@ router.get(
   SalesController.searchSales
 );
 
+// Inventory report
+router.get(
+  "/:tenantId/inventory-report",
+  requireRole(["Admin", "SuperAdmin"]),
+  SalesController.getInventoryReport
+);
+
+// Sales performance report
+router.get(
+  "/:tenantId/sales-performance-report",
+  requireRole(["Admin", "SuperAdmin"]),
+  SalesController.getSalesPerformanceReport
+);
+
+// General report
+router.get(
+  "/:tenantId/general-report",
+  requireRole(["Admin", "SuperAdmin"]),
+  SalesController.getGeneralReport
+);
+
+// Export inventory report as CSV
+router.get(
+  "/:tenantId/inventory-report-csv",
+  requireRole(["Admin", "SuperAdmin"]),
+  SalesController.getInventoryReportCSV
+);
+
+// Export inventory report as PDF
+router.get(
+  "/:tenantId/inventory-report-pdf",
+  requireRole(["Admin", "SuperAdmin"]),
+  SalesController.getInventoryReportPDF
+);
+
+// Export inventory report as Excel
+router.get(
+  "/:tenantId/inventory-report-excel",
+  requireRole(["Admin", "SuperAdmin"]),
+  SalesController.getInventoryReportExcel
+);
+
 module.exports = router;

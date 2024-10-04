@@ -24,6 +24,7 @@ const SalesSchema = new mongoose.Schema({
   },
   previousOwners: { type: Number, default: 0 },
   isCertified: { type: Boolean, default: false },
+  isReconditioned: { type: Boolean, default: false },
   salePrice: { type: Number, required: true }, // Sale price of the vehicle
   soldPrice: { type: Number, required: false},
   listedOn: { type: Date, default: Date.now }, // When the vehicle was listed for sale
@@ -41,7 +42,8 @@ const SalesSchema = new mongoose.Schema({
   buyer: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
-  }, // Buyer (user) who purchased the vehicle
+  }, 
+  notes: { type: String }// Buyer (user) who purchased the vehicle
   // Any additional notes regarding the transaction
 });
 

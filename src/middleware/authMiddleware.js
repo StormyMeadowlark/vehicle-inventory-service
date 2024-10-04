@@ -19,6 +19,10 @@ const requireRole = (roles) => {
       // Verify JWT token
       jwt.verify(token, process.env.JWT_SECRET, async (err, decoded) => {
         if (err) {
+          if (err.name === "TokenExpiredError") {
+            console.log("[AUTH] JWT token is expired.");
+            return res.status(401).json({ error: "Token expired." });
+          }
           console.log("[AUTH] JWT verification error:", err.message);
           return res.status(401).json({ error: "Invalid token." });
         }
@@ -59,7 +63,6 @@ const requireRole = (roles) => {
             userResponse.data
           );
 
-          // Correctly access the 'user' field nested inside 'data'
           const user = userResponse.data.data.user; // Access user via data.data.user
 
           if (user) {

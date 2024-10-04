@@ -2,6 +2,9 @@ const mongoose = require("mongoose");
 const Vehicle = require("../models/vehicle");
 const Sales = require("../models/sales");
 const axios = require("axios");
+const XLSX = require("xlsx");
+const puppeteer = require("puppeteer");
+const { Parser } = require("json2csv");
 
 exports.addSale = async (req, res) => {
   try {
@@ -472,5 +475,301 @@ exports.searchSales = async (req, res) => {
   } catch (error) {
     console.error("[ERROR] Searching sales:", error);
     res.status(500).json({ message: "Error searching sales", error });
+  }
+};
+exports.getInventoryReport = async (req, res) => {
+  try {
+    const tenantId = req.headers["x-tenant-id"];
+    if (!tenantId) {
+      return res.status(400).json({ message: "x-tenant-id header is missing" });
+    }
+
+    // Get total vehicles
+    const totalVehicles = await Vehicle.countDocuments({ tenant: tenantId });
+
+    // Get available vehicles for sale
+    const availableVehicles = await Vehicle.countDocuments({
+      tenant: tenantId,
+      status: "available",
+    });
+
+    // Get sold vehicles
+    const soldVehicles = await Vehicle.countDocuments({
+      tenant: tenantId,
+      status: "sold",
+    });
+
+    // Breakdown by make
+    const makeBreakdown = await Vehicle.aggregate([
+      { $match: { tenant: tenantId } },
+      { $group: { _id: "$make", count: { $sum: 1 } } },
+    ]);
+
+    // Inventory value breakdown by year
+    const inventoryValueBreakdown = await Vehicle.aggregate([
+      { $match: { tenant: tenantId, status: "available" } },
+      {
+        $group: {
+          _id: "$year",
+          totalValue: { $sum: "$salePrice" },
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    res.status(200).json({
+      totalVehicles,
+      availableVehicles,
+      soldVehicles,
+      makeBreakdown,
+      inventoryValueBreakdown,
+    });
+  } catch (error) {
+    console.error("[ERROR] Getting inventory report:", error);
+    res
+      .status(500)
+      .json({ message: "Error generating inventory report", error });
+  }
+};
+exports.getSalesPerformanceReport = async (req, res) => {
+  try {
+    const tenantId = req.headers["x-tenant-id"];
+    const { startDate, endDate } = req.query;
+
+    if (!tenantId) {
+      return res.status(400).json({ message: "x-tenant-id header is missing" });
+    }
+
+    // Filter for sales within the provided date range
+    const matchFilter = { tenant: tenantId, status: "sold" };
+    if (startDate) matchFilter.soldOn = { $gte: new Date(startDate) };
+    if (endDate)
+      matchFilter.soldOn = { ...matchFilter.soldOn, $lte: new Date(endDate) };
+
+    // Total sales count and total revenue
+    const totalSales = await Vehicle.countDocuments(matchFilter);
+    const totalRevenue = await Vehicle.aggregate([
+      { $match: matchFilter },
+      { $group: { _id: null, totalRevenue: { $sum: "$soldPrice" } } },
+    ]);
+
+    // Sales by make
+    const salesByMake = await Vehicle.aggregate([
+      { $match: matchFilter },
+      {
+        $group: {
+          _id: "$make",
+          count: { $sum: 1 },
+          totalRevenue: { $sum: "$soldPrice" },
+        },
+      },
+    ]);
+
+    res.status(200).json({
+      totalSales,
+      totalRevenue: totalRevenue[0]?.totalRevenue || 0,
+      salesByMake,
+    });
+  } catch (error) {
+    console.error("[ERROR] Getting sales performance report:", error);
+    res
+      .status(500)
+      .json({ message: "Error generating sales performance report", error });
+  }
+};
+exports.getGeneralReport = async (req, res) => {
+  try {
+    const tenantId = req.headers["x-tenant-id"];
+    if (!tenantId) {
+      return res.status(400).json({ message: "x-tenant-id header is missing" });
+    }
+
+    // Get total vehicles, total sold, and average sale price of available vehicles
+    const totalVehicles = await Vehicle.countDocuments({ tenant: tenantId });
+    const totalSold = await Vehicle.countDocuments({
+      tenant: tenantId,
+      status: "sold",
+    });
+
+    const averagePrice = await Vehicle.aggregate([
+      { $match: { tenant: tenantId, status: "available" } },
+      { $group: { _id: null, avgPrice: { $avg: "$salePrice" } } },
+    ]);
+
+    res.status(200).json({
+      totalVehicles,
+      totalSold,
+      averagePrice: averagePrice[0]?.avgPrice || 0,
+    });
+  } catch (error) {
+    console.error("[ERROR] Getting general report:", error);
+    res.status(500).json({ message: "Error generating general report", error });
+  }
+};
+exports.getInventoryReportCSV = async (req, res) => {
+  try {
+    const tenantId = req.headers["x-tenant-id"];
+    if (!tenantId) {
+      return res.status(400).json({ message: "x-tenant-id header is missing" });
+    }
+
+    const totalVehicles = await Vehicle.countDocuments({ tenant: tenantId });
+    const availableVehicles = await Vehicle.countDocuments({
+      tenant: tenantId,
+      status: "available",
+    });
+    const soldVehicles = await Vehicle.countDocuments({
+      tenant: tenantId,
+      status: "sold",
+    });
+    const makeBreakdown = await Vehicle.aggregate([
+      { $match: { tenant: tenantId } },
+      { $group: { _id: "$make", count: { $sum: 1 } } },
+    ]);
+
+    const reportData = {
+      totalVehicles,
+      availableVehicles,
+      soldVehicles,
+      makeBreakdown,
+    };
+
+    // Convert the reportData to CSV format
+    const fields = [
+      "totalVehicles",
+      "availableVehicles",
+      "soldVehicles",
+      "makeBreakdown._id",
+      "makeBreakdown.count",
+    ];
+    const json2csvParser = new Parser({ fields });
+    const csv = json2csvParser.parse(reportData);
+
+    // Set the response headers to download the file
+    res.header("Content-Type", "text/csv");
+    res.attachment("inventory-report.csv");
+    return res.send(csv);
+  } catch (error) {
+    console.error("[ERROR] Exporting CSV:", error);
+    res.status(500).json({ message: "Error exporting CSV", error });
+  }
+};
+exports.getInventoryReportPDF = async (req, res) => {
+  try {
+    const tenantId = req.headers["x-tenant-id"];
+    if (!tenantId) {
+      return res.status(400).json({ message: "x-tenant-id header is missing" });
+    }
+
+    const totalVehicles = await Vehicle.countDocuments({ tenant: tenantId });
+    const availableVehicles = await Vehicle.countDocuments({
+      tenant: tenantId,
+      status: "available",
+    });
+    const soldVehicles = await Vehicle.countDocuments({
+      tenant: tenantId,
+      status: "sold",
+    });
+    const makeBreakdown = await Vehicle.aggregate([
+      { $match: { tenant: tenantId } },
+      { $group: { _id: "$make", count: { $sum: 1 } } },
+    ]);
+
+    // HTML content to be converted to PDF
+    const htmlContent = `
+      <html>
+        <head><title>Inventory Report</title></head>
+        <body>
+          <h1>Inventory Report</h1>
+          <p>Total Vehicles: ${totalVehicles}</p>
+          <p>Available Vehicles: ${availableVehicles}</p>
+          <p>Sold Vehicles: ${soldVehicles}</p>
+          <h2>Breakdown by Make</h2>
+          <ul>
+            ${makeBreakdown
+              .map((item) => `<li>${item._id}: ${item.count}</li>`)
+              .join("")}
+          </ul>
+        </body>
+      </html>
+    `;
+
+    // Launch Puppeteer to create a PDF
+    const browser = await puppeteer.launch();
+    const page = await browser.newPage();
+    await page.setContent(htmlContent);
+
+    const pdf = await page.pdf({ format: "A4" });
+    await browser.close();
+
+    // Set response headers and send PDF
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="inventory-report.pdf"'
+    );
+    return res.send(pdf);
+  } catch (error) {
+    console.error("[ERROR] Exporting PDF:", error);
+    res.status(500).json({ message: "Error exporting PDF", error });
+  }
+};
+exports.getInventoryReportExcel = async (req, res) => {
+  try {
+    const tenantId = req.headers["x-tenant-id"];
+    if (!tenantId) {
+      return res.status(400).json({ message: "x-tenant-id header is missing" });
+    }
+
+    const totalVehicles = await Vehicle.countDocuments({ tenant: tenantId });
+    const availableVehicles = await Vehicle.countDocuments({
+      tenant: tenantId,
+      status: "available",
+    });
+    const soldVehicles = await Vehicle.countDocuments({
+      tenant: tenantId,
+      status: "sold",
+    });
+    const makeBreakdown = await Vehicle.aggregate([
+      { $match: { tenant: tenantId } },
+      { $group: { _id: "$make", count: { $sum: 1 } } },
+    ]);
+
+    const reportData = [
+      { metric: "Total Vehicles", value: totalVehicles },
+      { metric: "Available Vehicles", value: availableVehicles },
+      { metric: "Sold Vehicles", value: soldVehicles },
+    ];
+
+    // Add breakdown by make to the reportData
+    makeBreakdown.forEach((item) => {
+      reportData.push({ metric: `Make: ${item._id}`, value: item.count });
+    });
+
+    // Create a new workbook and worksheet
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.json_to_sheet(reportData);
+
+    // Append the worksheet to the workbook
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Inventory Report");
+
+    // Generate Excel file and send it
+    const excelBuffer = XLSX.write(workbook, {
+      bookType: "xlsx",
+      type: "buffer",
+    });
+
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="inventory-report.xlsx"'
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.send(excelBuffer);
+  } catch (error) {
+    console.error("[ERROR] Exporting Excel:", error);
+    res.status(500).json({ message: "Error exporting Excel", error });
   }
 };

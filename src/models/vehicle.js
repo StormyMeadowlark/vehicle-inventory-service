@@ -18,8 +18,11 @@ const VehicleSchema = new mongoose.Schema({
   tenant: { type: String, required: true }, // Tenant is required
   users: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
   organization: { type: mongoose.Schema.Types.ObjectId, ref: "Organization" }, // Users array is optional
+  features: [{ type: String }],
+  dynamicFields: { type: mongoose.Schema.Types.Mixed }, // Flexible field for additional dynamic data
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
+  softDelete: { type: Boolean, default: false },
 });
 
 // Add pagination plugin
