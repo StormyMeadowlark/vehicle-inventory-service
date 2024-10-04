@@ -3,6 +3,7 @@ const axios = require("axios");
 const vision = require("@google-cloud/vision");
 const Media = require("../models/media");
 const AWS = require("aws-sdk");
+const sharp = require("sharp");
 
 
 // Add a new vehicle
@@ -358,7 +359,7 @@ exports.extractAndDecodeVIN = async (req, res) => {
 
     const uploadedMediaUrls = [];
 
-    // Upload each file to DigitalOcean Spaces
+    // Upload each file to DigitalOcean Spaces and preprocess images
     for (const file of req.files) {
       const uploadParams = {
         Bucket: process.env.DO_SPACES_BUCKET,
@@ -368,15 +369,32 @@ exports.extractAndDecodeVIN = async (req, res) => {
         ContentType: file.mimetype,
       };
 
-      const result = await s3.upload(uploadParams).promise();
+      // Preprocess the image
+      const processedImageBuffer = await sharp(file.buffer)
+        .resize(800) // Resize to width of 800 pixels
+        .grayscale() // Convert to grayscale
+        .linear(1.2, -50) // Increase contrast; adjust parameters as needed
+        .toBuffer();
+
+      // Upload the processed image
+      const result = await s3
+        .upload({
+          ...uploadParams,
+          Body: processedImageBuffer, // Use processed image buffer
+        })
+        .promise();
+
       uploadedMediaUrls.push(result.Location); // Store the public URL of the uploaded file
     }
 
     // Save the uploaded images to the Media collection
     const media = new Media({
       tenantId,
-      vehicleId: null, // If vehicleId is available, link it; otherwise, leave it null
+      vehicleId: null,
       photos: uploadedMediaUrls,
+      uploadedBy: req.user._id,
+      mediaUrl: uploadedMediaUrls[0],
+      mediaType: req.files[0].mimetype,
     });
 
     await media.save();
@@ -384,7 +402,7 @@ exports.extractAndDecodeVIN = async (req, res) => {
     // Perform OCR to extract the VIN from the uploaded image
     const client = new vision.ImageAnnotatorClient();
     const [result] = await client.textDetection({
-      image: { source: { imageUri: uploadedMediaUrls[0] } }, // Use the URL directly for OCR
+      image: { source: { imageUri: uploadedMediaUrls[0] } },
     });
 
     const detections = result.textAnnotations;
@@ -422,16 +440,28 @@ exports.extractAndDecodeVIN = async (req, res) => {
       make: vehicleDetails.Make || "Unknown",
       model: vehicleDetails.Model || "Unknown",
       year: vehicleDetails.ModelYear || "Unknown",
-      engine: vehicleDetails.EngineModel || "Unknown",
+      engine: vehicleDetails.DisplacementL || "Unknown",
       bodyType: vehicleDetails.BodyClass || "Unknown",
+      trim: vehicleDetails.Trim || "Unknown",
       transmission: req.body.transmission || "Unknown",
-      drivetrain: req.body.drivetrain || "Unknown",
-      fuelType: req.body.fuelType || "Unknown",
+      drivetrain: vehicleDetails.DriveType || "Unknown",
+      fuelType: vehicleDetails.FuelTypePrimary || "Unknown",
       exteriorColor: req.body.exteriorColor || "Unknown",
       interiorColor: req.body.interiorColor || "Unknown",
       mileage: req.body.mileage || 0,
-      features: req.body.features || [],
+      dynamicFields: {}, // Initialize dynamicFields
     };
+
+    // Extract dynamic fields from vehicleDetails
+    for (const key in vehicleDetails) {
+      if (
+        !vehicleData.hasOwnProperty(key) && // Only include if not already defined in vehicleData
+        key !== "ErrorCode" &&
+        key !== "ErrorText"
+      ) {
+        vehicleData.dynamicFields[key] = vehicleDetails[key]; // Add to dynamicFields
+      }
+    }
 
     // Return vehicle details along with media
     return res.status(200).json({
@@ -482,11 +512,12 @@ exports.decodeVIN = async (req, res) => {
       const dynamicFields = {};
 
       const fieldMapping = {
+        VIN: "VIN",
         make: "Make",
         model: "Model",
         year: "ModelYear",
         trim: "Trim",
-        engine: "EngineDescription",
+        engine: "DisplacementL",
         transmission: "TransmissionStyle",
         drivetrain: "DriveType",
         fuelType: "FuelTypePrimary",

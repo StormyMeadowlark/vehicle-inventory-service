@@ -11,7 +11,7 @@ const MediaSchema = new mongoose.Schema({
   },
   mediaType: {
     type: String,
-    enum: ["photo", "document", "video", "image/jpeg"], // Type of media (photo, document, video)
+    enum: ["photo", "document", "video", "image/jpeg", "image/png"], // Type of media (photo, document, video)
     required: true,
   },
   mediaUrl: {

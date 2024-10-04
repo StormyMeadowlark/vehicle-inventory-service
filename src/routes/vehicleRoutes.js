@@ -55,7 +55,11 @@ router.post(
 );
 
 // Decode VIN manually entered by user
-router.post("/:tenantId/decode-vin", VehicleController.decodeVIN);
+router.post(
+  "/:tenantId/decode-vin",
+  requireRole(["Admin", "SuperAdmin"]),
+  VehicleController.decodeVIN
+);
 
 
 
