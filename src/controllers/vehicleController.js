@@ -399,8 +399,23 @@ exports.extractAndDecodeVIN = async (req, res) => {
 
     await media.save();
 
+    // Access the JSON credentials file from the secondary bucket
+    const jsonFileKey = "composed-mason-437518-c2-1fc8cc636f09.json"; // File key in the secondary bucket
+    const jsonParams = {
+      Bucket: process.env.DO_SPACES_BUCKET_SECONDARY,
+      Key: jsonFileKey,
+    };
+
+    // Fetch the JSON credentials file from the secondary bucket
+    const jsonData = await s3.getObject(jsonParams).promise();
+    const credentials = JSON.parse(jsonData.Body.toString("utf-8")); // Parse the JSON content
+
+    // Initialize Google Cloud Vision client with credentials
+    const client = new vision.ImageAnnotatorClient({
+      credentials: credentials, // Use the fetched credentials
+    });
+
     // Perform OCR to extract the VIN from the uploaded image
-    const client = new vision.ImageAnnotatorClient();
     const [result] = await client.textDetection({
       image: { source: { imageUri: uploadedMediaUrls[0] } },
     });
@@ -463,7 +478,7 @@ exports.extractAndDecodeVIN = async (req, res) => {
       }
     }
 
-    // Return vehicle details along with media
+    // Return vehicle details along with media and JSON content
     return res.status(200).json({
       message: "VIN extracted and vehicle details decoded successfully",
       vehicle: vehicleData,
