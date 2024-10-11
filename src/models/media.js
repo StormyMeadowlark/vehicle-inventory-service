@@ -12,11 +12,11 @@ const MediaSchema = new mongoose.Schema({
   mediaType: {
     type: String,
     enum: ["photo", "document", "video", "image/jpeg", "image/png"], // Type of media (photo, document, video)
-    required: true,
+
   },
   mediaUrl: {
     type: String,
-    required: true,
+
   }, // URL or path to the media file (image, document, video)
   description: {
     type: String,
@@ -25,7 +25,7 @@ const MediaSchema = new mongoose.Schema({
   uploadedBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
-    required: true,
+
   },
   createdAt: {
     type: Date,
