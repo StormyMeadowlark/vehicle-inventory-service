@@ -19,6 +19,8 @@ exports.addMedia = async (req, res) => {
     }
 
     const { vehicleId } = req.params;
+    const uploadedMedia = [];
+
 
     // Ensure the vehicle exists and belongs to the tenant
     const vehicle = await Vehicle.findOne({ _id: vehicleId, tenant: tenantId });
@@ -27,8 +29,6 @@ exports.addMedia = async (req, res) => {
         .status(404)
         .json({ message: "Vehicle not found or access denied" });
     }
-
-    const uploadedMediaUrls = [];
 
     // Upload each file to DigitalOcean Spaces
     for (const file of req.files) {
@@ -41,7 +41,14 @@ exports.addMedia = async (req, res) => {
       };
 
       const result = await s3.upload(uploadParams).promise();
-      uploadedMediaUrls.push(result.Location); // Store the public URL of the uploaded file
+      uploadedMedia.push({
+        mediaType: file.mimetype, // Automatically set the correct media type
+        mediaUrl: result.Location,
+        alt: req.body.alt || "", // Optional alt text for the image
+        description: req.body.description || "", // Optional description
+        tags: req.body.tags ? JSON.parse(req.body.tags) : [], // Optional tags
+        uploadedBy: req.user._id,
+      });
     }
 
     let media = await Media.findOne({ vehicleId });
@@ -49,11 +56,10 @@ exports.addMedia = async (req, res) => {
       media = new Media({
         tenantId, // Add tenantId here for future reference
         vehicleId,
-        photos: uploadedMediaUrls,
-        documents: [],
+        media: uploadedMedia,
       });
     } else {
-      media.photos = media.photos.concat(uploadedMediaUrls);
+      media.media = media.media.concat(uploadedMedia);
     }
 
     await media.save();
@@ -66,6 +72,7 @@ exports.addMedia = async (req, res) => {
       .json({ message: "Error adding media", error: error.message });
   }
 };
+
 exports.addTenantMedia = async (req, res) => {
   try {
     // Log the files received by Multer

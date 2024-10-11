@@ -7,34 +7,60 @@ const MediaSchema = new mongoose.Schema({
   },
   vehicleId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "Vehicle", // Reference to the Vehicle model // Media is associated with a vehicle
+    ref: "Vehicle", // Reference to the Vehicle model
   },
-  mediaType: {
-    type: String,
-    enum: ["photo", "document", "video", "image/jpeg", "image/png"], // Type of media (photo, document, video)
+  media: [
+    {
+      mediaType: {
+        type: String,
+        enum: [
+          // Images
+          "image/jpeg",
+          "image/png",
+          "image/gif",
+          "image/webp",
 
-  },
-  mediaUrl: {
-    type: String,
+          // Videos
+          "video/mp4",
+          "video/webm",
+          "video/ogg",
 
-  }, // URL or path to the media file (image, document, video)
-  description: {
-    type: String,
-  }, // Optional description of the media
-  tags: [{ type: String }], // Optional tags to describe or categorize media
-  uploadedBy: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now,
-  }, // When the media was uploaded
-  updatedAt: {
-    type: Date,
-    default: Date.now,
-  }, // Last time media was updated
+          // Documents
+          "application/pdf",
+          "application/msword",
+          "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // DOCX
+          "application/vnd.ms-excel", // XLS
+          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", // XLSX
+        ],
+        required: true,
+      },
+      mediaUrl: {
+        type: String,
+        required: true,
+      },
+      alt: {
+        type: String,
+        required: false, // Optional alt text for accessibility
+      },
+      description: {
+        type: String,
+      }, // Optional description of the media
+      tags: [{ type: String }],
+      uploadedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "User",
+        required: true,
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now,
+      },
+      updatedAt: {
+        type: Date,
+        default: Date.now,
+      },
+    },
+  ],
 });
 
 module.exports = mongoose.model("Media", MediaSchema);

@@ -363,7 +363,7 @@ exports.extractAndDecodeVIN = async (req, res) => {
     for (const file of req.files) {
       const uploadParams = {
         Bucket: process.env.DO_SPACES_BUCKET,
-        Key: `${tenantId}/${Date.now()}_${file.originalname}`,
+        Key: `${tenantId}/extract-and-decode-vin/${Date.now()}_${file.originalname}`,
         Body: file.buffer,
         ACL: "public-read",
         ContentType: file.mimetype,
@@ -457,7 +457,7 @@ exports.extractAndDecodeVIN = async (req, res) => {
       year: vehicleDetails.ModelYear || "Unknown",
       engine: vehicleDetails.DisplacementL || "Unknown",
       bodyType: vehicleDetails.BodyClass || "Unknown",
-      trim: vehicleDetails.Trim || "Unknown",
+      trim: vehicleDetails.Series || "Unknown",
       transmission: req.body.transmission || "Unknown",
       drivetrain: vehicleDetails.DriveType || "Unknown",
       fuelType: vehicleDetails.FuelTypePrimary || "Unknown",
